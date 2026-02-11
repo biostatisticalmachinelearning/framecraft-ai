@@ -25,10 +25,14 @@ def main(cfg: DictConfig) -> None:
     print(f"Using device: {device}")
 
     train_ds = FrameInterpolationDataset(
-        cfg.data.train_manifest, force_rgb=cfg.data.force_rgb
+        cfg.data.train_manifest,
+        force_rgb=cfg.data.force_rgb,
+        crop_size=cfg.data.crop_size,
     )
     val_ds = FrameInterpolationDataset(
-        cfg.data.val_manifest, force_rgb=cfg.data.force_rgb
+        cfg.data.val_manifest,
+        force_rgb=cfg.data.force_rgb,
+        crop_size=cfg.data.crop_size,
     )
 
     train_loader = DataLoader(

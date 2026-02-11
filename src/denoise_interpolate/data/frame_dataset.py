@@ -17,6 +17,7 @@ class FrameInterpolationDataset(Dataset):
         manifest_path: str | Path,
         force_rgb: bool = True,
         transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        crop_size: Optional[int] = None,
     ) -> None:
         self.manifest_path = Path(manifest_path)
         if not self.manifest_path.exists():
@@ -27,6 +28,7 @@ class FrameInterpolationDataset(Dataset):
             self.items = [json.loads(line) for line in f if line.strip()]
         self.force_rgb = force_rgb
         self.transform = transform
+        self.crop_size = crop_size
 
     def __len__(self) -> int:
         return len(self.items)
@@ -45,6 +47,11 @@ class FrameInterpolationDataset(Dataset):
         prev = self._load_image(item["prev"])
         nxt = self._load_image(item["next"])
         target = self._load_image(item["target"])
+
+        if self.crop_size:
+            from .transforms import joint_random_crop
+
+            prev, nxt, target = joint_random_crop(prev, nxt, target, self.crop_size)
 
         if self.transform is not None:
             prev = self.transform(prev)

@@ -72,10 +72,16 @@ python scripts/prepare_data.py --frames-root data/frames
 This produces JSONL manifests in `data/manifests/` with triplets: `prev`, `next`, `target`, `movie_id`.
 
 ## Training
-Default training uses the baseline U-Net.
+Default training uses the baseline U-Net. Crops are 256x256 by default.
 
 ```bash
 python scripts/train.py
+```
+
+To override crop size (e.g., 128 or 512):
+
+```bash
+python scripts/train.py data.crop_size=128
 ```
 
 Hydra outputs (including TensorBoard logs) are written under `outputs/` by default.
