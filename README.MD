@@ -58,10 +58,16 @@ python scripts/download_sources.py --max-items 5 --max-total-gb 20 --workers 2
 3. Extract frames per movie into subfolders (24 fps expected):
 
 ```bash
-python scripts/extract_frames.py --input-dir data/raw --fps 24
+python scripts/extract_frames.py --input-dir data/raw --fps 24 --recursive
 ```
 
 If you intentionally want a different frame rate for ablations, pass `--allow-non-24`.
+
+By default, frames are extracted at the **original resolution**. To downscale, pass `--scale`, e.g.:
+
+```bash
+python scripts/extract_frames.py --input-dir data/raw --fps 24 --recursive --scale \"scale=-2:360\"
+```
 
 4. Build train/val/test manifests (movie-level splits):
 

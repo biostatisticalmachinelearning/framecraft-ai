@@ -19,13 +19,20 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Allow extracting at a frame rate other than 24 fps.",
     )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Search input-dir recursively for videos (useful if videos are in subfolders).",
+    )
     parser.add_argument("--scale", default="", help="Scale filter, e.g. 'scale=-2:720'")
     parser.add_argument("--ext", default="png", help="Frame image extension.")
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
 
-def list_videos(path: Path) -> List[Path]:
+def list_videos(path: Path, recursive: bool) -> List[Path]:
+    if recursive:
+        return sorted([p for p in path.rglob("*") if p.suffix.lower() in VIDEO_EXTS])
     return sorted([p for p in path.iterdir() if p.suffix.lower() in VIDEO_EXTS])
 
 
@@ -72,8 +79,17 @@ def main() -> None:
         return
 
     input_dir = Path(args.input_dir)
-    for video in list_videos(input_dir):
-        out_dir = output_root / video.stem
+    videos = list_videos(input_dir, args.recursive)
+    if not videos:
+        raise SystemExit(
+            f"No videos found under {input_dir}. "
+            "If your videos are in subfolders, pass --recursive or use --input."
+        )
+    for video in videos:
+        if args.recursive and video.parent != input_dir:
+            out_dir = output_root / video.parent.name
+        else:
+            out_dir = output_root / video.stem
         run_ffmpeg(video, out_dir, args.fps, args.scale, args.ext, args.overwrite)
 
 
