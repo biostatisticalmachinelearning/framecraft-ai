@@ -1,0 +1,146 @@
+sources:
+  # Library of Congress: Free to Use and Reuse (Public Domain Films from the National Film Registry)
+  - id: loc_st_louis_blues
+    title: "St. Louis Blues"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023602002/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_popeye_sindbad
+    title: "Popeye the Sailor Meets Sindbad the Sailor"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023602008/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_house_i_live_in
+    title: "The House I Live In"
+    provider: loc
+    item_url: https://www.loc.gov/item/2024600519/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_middleton_family_worlds_fair
+    title: "The Middleton Family at the New York World's Fair"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023600635/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_modesta
+    title: "Modesta"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023600548/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_master_hands
+    title: "Master Hands"
+    provider: loc
+    item_url: https://www.loc.gov/item/2022600183/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_memphis_belle
+    title: "The Memphis Belle: A Story of a Flying Fortress"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023602007/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_all_my_babies
+    title: "All My Babies...A Midwife's Own Story"
+    provider: loc
+    item_url: https://www.loc.gov/item/2017604960/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_under_western_stars
+    title: "Under Western Stars"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023600630/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_duck_and_cover
+    title: "Duck and Cover"
+    provider: loc
+    item_url: https://www.loc.gov/item/2022604365/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_hitch_hiker
+    title: "The Hitch-Hiker"
+    provider: loc
+    item_url: https://www.loc.gov/item/2023602025/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_trance_and_dance_bali
+    title: "Trance and Dance in Bali"
+    provider: loc
+    item_url: https://www.loc.gov/item/2001646000/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_within_our_gates
+    title: "Within Our Gates"
+    provider: loc
+    item_url: https://www.loc.gov/item/2024600507/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_sf_earthquake_fire_1906
+    title: "San Francisco earthquake and fire, April 18, 1906"
+    provider: loc
+    item_url: https://www.loc.gov/item/00694425/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_mckinley_oath
+    title: "President McKinley Taking the Oath"
+    provider: loc
+    item_url: https://www.loc.gov/item/00694336/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_great_train_robbery
+    title: "The Great Train Robbery"
+    provider: loc
+    item_url: https://www.loc.gov/item/00694220/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_panorama_machine_co
+    title: "Panorama of Machine Co. aisle, Westinghouse Co. works"
+    provider: loc
+    item_url: https://www.loc.gov/item/96522104/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  - id: loc_may_irwin_kiss
+    title: "May Irwin Kiss"
+    provider: loc
+    item_url: https://www.loc.gov/item/00694131/
+    license: "LOC Free to Use and Reuse: Public Domain Films from the National Film Registry"
+    license_url: https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/
+
+  # Prelinger Archive seeds (expanded via scripts/refresh_sources.py)
+  - id: ia_what_about_juvenile_delinquency_1955
+    title: "What About Juvenile Delinquency (1955)"
+    provider: ia
+    identifier: WhatAbou1955
+    item_url: https://archive.org/details/WhatAbou1955
+    license: "Public Domain (IA Usage)"
+    license_url: https://archive.org/details/WhatAbou1955
+    notes: "Prelinger Archive"
+
+  - id: ia_wartime_nutrition_1943
+    title: "Wartime Nutrition (1943)"
+    provider: ia
+    identifier: WartimeN1943
+    item_url: https://archive.org/details/WartimeN1943
+    license: "Public Domain (IA Usage)"
+    license_url: https://archive.org/details/WartimeN1943
+    notes: "Prelinger Archive"
