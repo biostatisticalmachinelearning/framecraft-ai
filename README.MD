@@ -55,11 +55,13 @@ python scripts/refresh_sources.py --total-target 100
 python scripts/download_sources.py --max-items 5 --max-total-gb 20
 ```
 
-3. Extract frames per movie into subfolders:
+3. Extract frames per movie into subfolders (24 fps expected):
 
 ```bash
 python scripts/extract_frames.py --input-dir data/raw --fps 24
 ```
+
+If you intentionally want a different frame rate for ablations, pass `--allow-non-24`.
 
 4. Build train/val/test manifests (movie-level splits):
 
