@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import requests
 import yaml
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".mpg", ".mpeg")
 
@@ -23,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--registry", default="data/registry.jsonl")
     parser.add_argument("--max-items", type=int, default=5)
     parser.add_argument("--max-total-gb", type=float, default=20.0)
+    parser.add_argument("--workers", type=int, default=2, help="Parallel downloads.")
     parser.add_argument("--quality", choices=["low", "medium", "high"], default="medium")
     parser.add_argument("--loc-format", choices=["mp4", "mov"], default="mp4")
     parser.add_argument("--overwrite", action="store_true", help="Re-download if file exists.")
@@ -125,6 +127,43 @@ def stream_download(url: str, dest: Path) -> Tuple[int, str]:
     return total, sha256.hexdigest()
 
 
+def resolve_download(src: Dict[str, Any], args: argparse.Namespace) -> str:
+    provider = src.get("provider")
+    item_url = src.get("item_url")
+    if provider == "loc":
+        return src.get("download_url") or loc_resolve_download(item_url, args.loc_format)
+    if provider == "ia":
+        identifier = src.get("identifier")
+        return src.get("download_url") or ia_resolve_download(identifier, args.quality)
+    raise ValueError(f"Unknown provider: {provider}")
+
+
+def estimate_size(url: str) -> int:
+    try:
+        head = requests.head(url, allow_redirects=True, timeout=30)
+        return int(head.headers.get("content-length", 0))
+    except requests.RequestException:
+        return 0
+
+
+def download_one(src: Dict[str, Any], download_url: str, dest: Path) -> Dict[str, Any]:
+    size_bytes, sha256 = stream_download(download_url, dest)
+    return {
+        "id": src.get("id"),
+        "title": src.get("title"),
+        "provider": src.get("provider"),
+        "item_url": src.get("item_url"),
+        "download_url": download_url,
+        "license": src.get("license"),
+        "license_url": src.get("license_url"),
+        "file_path": str(dest),
+        "size_bytes": size_bytes,
+        "sha256": sha256,
+        "fetched_at": datetime.utcnow().isoformat() + "Z",
+        "notes": src.get("notes"),
+    }
+
+
 def main() -> None:
     args = parse_args()
     sources = load_sources(args.sources)
@@ -136,31 +175,17 @@ def main() -> None:
     total_bytes = 0
     downloaded = 0
 
+    tasks = []
     for src in sources:
-        if downloaded >= args.max_items:
+        if downloaded + len(tasks) >= args.max_items:
             break
 
-        provider = src.get("provider")
-        title = src.get("title")
-        item_url = src.get("item_url")
-
-        if provider == "loc":
-            download_url = src.get("download_url") or loc_resolve_download(
-                item_url, args.loc_format
-            )
-        elif provider == "ia":
-            identifier = src.get("identifier")
-            download_url = src.get("download_url") or ia_resolve_download(
-                identifier, args.quality
-            )
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
-
+        download_url = resolve_download(src, args)
         filename = download_url.split("/")[-1]
         dest = out_dir / src["id"] / filename
 
         if args.dry_run:
-            print(f"{src['id']}: {title} -> {download_url}")
+            print(f"{src['id']}: {src.get('title')} -> {download_url}")
             downloaded += 1
             continue
 
@@ -169,41 +194,38 @@ def main() -> None:
             downloaded += 1
             continue
 
-        # Optional size check via HEAD
-        size = 0
-        try:
-            head = requests.head(download_url, allow_redirects=True, timeout=30)
-            size = int(head.headers.get("content-length", 0))
-        except requests.RequestException:
-            size = 0
-        projected = total_bytes + size
-        if size > 0 and projected > args.max_total_gb * (1024**3):
+        size = estimate_size(download_url)
+        if size > 0 and total_bytes + size > args.max_total_gb * (1024**3):
             print(f"Skipping {src['id']} (size exceeds max-total-gb).")
             continue
 
-        print(f"Downloading {title}...")
-        size_bytes, sha256 = stream_download(download_url, dest)
-        total_bytes += size_bytes
+        total_bytes += size
+        tasks.append((src, download_url, dest))
 
-        entry = {
-            "id": src.get("id"),
-            "title": title,
-            "provider": provider,
-            "item_url": item_url,
-            "download_url": download_url,
-            "license": src.get("license"),
-            "license_url": src.get("license_url"),
-            "file_path": str(dest),
-            "size_bytes": size_bytes,
-            "sha256": sha256,
-            "fetched_at": datetime.utcnow().isoformat() + "Z",
-            "notes": src.get("notes"),
+    if not tasks and not args.dry_run:
+        print("No downloads scheduled.")
+        return
+
+    if args.dry_run:
+        print(f"Planned {downloaded} items (dry-run).")
+        return
+
+    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
+        future_map = {
+            executor.submit(download_one, src, url, dest): (src, url)
+            for src, url, dest in tasks
         }
+        for future in as_completed(future_map):
+            src, _ = future_map[future]
+            try:
+                entry = future.result()
+            except Exception as exc:
+                print(f"Failed {src.get('id')}: {exc}")
+                continue
 
-        with registry_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
-
-        downloaded += 1
+            with registry_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+            downloaded += 1
 
     print(f"Downloaded {downloaded} items. Registry: {registry_path}")
 

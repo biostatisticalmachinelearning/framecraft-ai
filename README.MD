@@ -52,7 +52,7 @@ python scripts/refresh_sources.py --total-target 100
 2. Download curated sources (defaults to 5 items from `configs/sources.yaml`):
 
 ```bash
-python scripts/download_sources.py --max-items 5 --max-total-gb 20
+python scripts/download_sources.py --max-items 5 --max-total-gb 20 --workers 2
 ```
 
 3. Extract frames per movie into subfolders (24 fps expected):
