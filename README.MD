@@ -69,6 +69,13 @@ By default, frames are extracted at the **original resolution**. To downscale, p
 python scripts/extract_frames.py --input-dir data/raw --fps 24 --recursive --scale \"scale=-2:360\"
 ```
 
+Extraction is lossless by default (PNG only).
+
+Tips for faster extraction:
+- Extract a quick subset: `--start 0 --duration 60`
+- Parallelize across movies: `--workers 2`
+```
+
 4. Build train/val/test manifests (movie-level splits):
 
 ```bash

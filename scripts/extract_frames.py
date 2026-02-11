@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, List
 
@@ -25,7 +26,15 @@ def parse_args() -> argparse.Namespace:
         help="Search input-dir recursively for videos (useful if videos are in subfolders).",
     )
     parser.add_argument("--scale", default="", help="Scale filter, e.g. 'scale=-2:720'")
-    parser.add_argument("--ext", default="png", help="Frame image extension.")
+    parser.add_argument("--ext", default="png", help="Frame image extension (lossless only).")
+    parser.add_argument("--start", type=float, default=0.0, help="Start time in seconds.")
+    parser.add_argument("--duration", type=float, default=0.0, help="Duration in seconds (0=full).")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Parallel extraction across videos (directory mode only).",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
@@ -43,20 +52,29 @@ def build_filter(fps: int, scale: str) -> str:
     return ",".join(parts)
 
 
-def run_ffmpeg(input_path: Path, output_dir: Path, fps: int, scale: str, ext: str, overwrite: bool) -> None:
+def run_ffmpeg(
+    input_path: Path,
+    output_dir: Path,
+    fps: int,
+    scale: str,
+    ext: str,
+    overwrite: bool,
+    start: float,
+    duration: float,
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     pattern = output_dir / f"%06d.{ext}"
     vf = build_filter(fps, scale)
-    cmd = [
-        "ffmpeg",
-        "-i",
-        str(input_path),
-        "-vf",
-        vf,
-        str(pattern),
-    ]
+    cmd = ["ffmpeg"]
     if overwrite:
-        cmd.insert(1, "-y")
+        cmd.append("-y")
+    if start > 0:
+        cmd += ["-ss", str(start)]
+    cmd += ["-i", str(input_path)]
+    if duration > 0:
+        cmd += ["-t", str(duration)]
+    cmd += ["-vf", vf]
+    cmd += [str(pattern)]
     print(" ".join(cmd))
     subprocess.run(cmd, check=True)
 
@@ -72,10 +90,23 @@ def main() -> None:
         )
 
     output_root = Path(args.output_dir)
+    if args.ext.lower() not in {"png"}:
+        raise SystemExit(
+            "Only lossless extraction is allowed. Use --ext png."
+        )
     if args.input:
         input_path = Path(args.input)
         out_dir = output_root / input_path.stem
-        run_ffmpeg(input_path, out_dir, args.fps, args.scale, args.ext, args.overwrite)
+        run_ffmpeg(
+            input_path,
+            out_dir,
+            args.fps,
+            args.scale,
+            args.ext,
+            args.overwrite,
+            args.start,
+            args.duration,
+        )
         return
 
     input_dir = Path(args.input_dir)
@@ -85,12 +116,30 @@ def main() -> None:
             f"No videos found under {input_dir}. "
             "If your videos are in subfolders, pass --recursive or use --input."
         )
-    for video in videos:
+    def job(video: Path) -> None:
         if args.recursive and video.parent != input_dir:
             out_dir = output_root / video.parent.name
         else:
             out_dir = output_root / video.stem
-        run_ffmpeg(video, out_dir, args.fps, args.scale, args.ext, args.overwrite)
+        run_ffmpeg(
+            video,
+            out_dir,
+            args.fps,
+            args.scale,
+            args.ext,
+            args.overwrite,
+            args.start,
+            args.duration,
+        )
+
+    if args.workers <= 1:
+        for video in videos:
+            job(video)
+    else:
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = [executor.submit(job, v) for v in videos]
+            for future in as_completed(futures):
+                future.result()
 
 
 if __name__ == "__main__":
