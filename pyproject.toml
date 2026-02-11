@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "denoise-interpolate"
+version = "0.1.0"
+description = "Frame interpolation and denoising for old films."
+readme = "README.MD"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Your Name"}]
+
+dependencies = [
+  "hydra-core",
+  "omegaconf",
+  "tensorboard",
+  "torchmetrics",
+  "tqdm",
+  "numpy",
+  "opencv-python",
+  "scikit-image",
+  "lpips",
+  "requests",
+  "pyyaml",
+]
+
+[project.optional-dependencies]
+torch = [
+  "torch",
+  "torchvision",
+]
+dev = [
+  "ruff",
+  "black",
+  "pytest",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.black]
+line-length = 100

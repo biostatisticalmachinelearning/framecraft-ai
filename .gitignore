@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+.env/
+
+# Data/artifacts
+/data/*
+!/data/README.md
+!/data/.gitkeep
+/outputs/
+/checkpoints/
+/logs/
+/experiments/
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Hydra outputs
+/outputs/
+/multirun/
+
+# Jupyter
+.ipynb_checkpoints/

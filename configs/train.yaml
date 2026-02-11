@@ -1,0 +1,47 @@
+defaults:
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+seed: 1337
+
+device:
+  prefer_mps: true
+
+data:
+  train_manifest: data/manifests/train.jsonl
+  val_manifest: data/manifests/val.jsonl
+  force_rgb: true
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
+
+model:
+  name: unet
+  in_channels: 6
+  out_channels: 3
+  base_channels: 64
+  depth: 4
+  vit:
+    patch_size: 16
+    embed_dim: 256
+    depth: 6
+    num_heads: 8
+    mlp_ratio: 4.0
+    dropout: 0.0
+
+optimizer:
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+
+train:
+  epochs: 20
+  val_every: 1
+  save_last: true
+
+logging:
+  log_dir: null
