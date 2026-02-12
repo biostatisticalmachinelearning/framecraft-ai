@@ -4,7 +4,9 @@ import argparse
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
+
+from tqdm import tqdm
 
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".mpg", ".mpeg"}
 
@@ -35,6 +37,11 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Parallel extraction across videos (directory mode only).",
     )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Show progress bars (per-movie only when --workers 1).",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
@@ -52,6 +59,35 @@ def build_filter(fps: int, scale: str) -> str:
     return ",".join(parts)
 
 
+def ffprobe_duration(path: Path) -> float:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=nk=1:nw=1",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return float(result.stdout.strip().splitlines()[0])
+    except Exception:
+        return 0.0
+
+
+def parse_time_str(value: str) -> float:
+    parts = value.strip().split(":")
+    if len(parts) == 3:
+        h, m, s = parts
+        return float(s) + 60 * float(m) + 3600 * float(h)
+    try:
+        return float(value)
+    except ValueError:
+        return 0.0
+
+
 def run_ffmpeg(
     input_path: Path,
     output_dir: Path,
@@ -61,6 +97,8 @@ def run_ffmpeg(
     overwrite: bool,
     start: float,
     duration: float,
+    progress: bool,
+    total_seconds: Optional[float],
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     pattern = output_dir / f"%06d.{ext}"
@@ -74,9 +112,33 @@ def run_ffmpeg(
     if duration > 0:
         cmd += ["-t", str(duration)]
     cmd += ["-vf", vf]
+    if progress and total_seconds and total_seconds > 0:
+        cmd += ["-progress", "pipe:1", "-nostats", "-v", "error"]
     cmd += [str(pattern)]
     print(" ".join(cmd))
-    subprocess.run(cmd, check=True)
+    if not (progress and total_seconds and total_seconds > 0):
+        subprocess.run(cmd, check=True)
+        return
+
+    pbar = tqdm(total=total_seconds, desc=input_path.name, unit="s", leave=False)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+    if proc.stdout is None:
+        raise RuntimeError("Failed to read ffmpeg progress output.")
+    for line in proc.stdout:
+        line = line.strip()
+        if line.startswith("out_time="):
+            sec = parse_time_str(line.split("=", 1)[1])
+            if sec > pbar.n:
+                pbar.n = min(sec, total_seconds)
+                pbar.refresh()
+        elif line.startswith("progress=") and line.endswith("end"):
+            break
+    stdout, stderr = proc.communicate()
+    pbar.n = total_seconds
+    pbar.refresh()
+    pbar.close()
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
 
 
 def main() -> None:
@@ -97,6 +159,11 @@ def main() -> None:
     if args.input:
         input_path = Path(args.input)
         out_dir = output_root / input_path.stem
+        total_seconds = (
+            args.duration
+            if args.duration > 0
+            else max(0.0, ffprobe_duration(input_path) - args.start)
+        )
         run_ffmpeg(
             input_path,
             out_dir,
@@ -106,6 +173,8 @@ def main() -> None:
             args.overwrite,
             args.start,
             args.duration,
+            args.progress,
+            total_seconds,
         )
         return
 
@@ -121,6 +190,13 @@ def main() -> None:
             out_dir = output_root / video.parent.name
         else:
             out_dir = output_root / video.stem
+        total_seconds = None
+        if args.progress and args.workers <= 1:
+            total_seconds = (
+                args.duration
+                if args.duration > 0
+                else max(0.0, ffprobe_duration(video) - args.start)
+            )
         run_ffmpeg(
             video,
             out_dir,
@@ -130,16 +206,26 @@ def main() -> None:
             args.overwrite,
             args.start,
             args.duration,
+            args.progress and args.workers <= 1,
+            total_seconds,
         )
 
     if args.workers <= 1:
-        for video in videos:
+        iterable = tqdm(videos, desc="Movies") if args.progress else videos
+        for video in iterable:
             job(video)
     else:
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             futures = [executor.submit(job, v) for v in videos]
-            for future in as_completed(futures):
-                future.result()
+            if args.progress:
+                outer = tqdm(total=len(videos), desc="Movies")
+                for future in as_completed(futures):
+                    future.result()
+                    outer.update(1)
+                outer.close()
+            else:
+                for future in as_completed(futures):
+                    future.result()
 
 
 if __name__ == "__main__":
