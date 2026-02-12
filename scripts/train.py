@@ -88,22 +88,25 @@ def main(cfg: DictConfig) -> None:
 
         if (epoch + 1) % cfg.train.val_every == 0:
             model.eval()
-            val_loss = 0.0
-            psnr.reset()
-            ssim.reset()
-            with torch.no_grad():
-                for batch in tqdm(val_loader, desc=f"Val {epoch+1}/{cfg.train.epochs}"):
-                    batch = to_device(batch, device)
-                    pred = model(batch["input"])
-                    loss = loss_fn(pred, batch["target"])
-                    val_loss += loss.item()
-                    psnr.update(pred, batch["target"])
-                    ssim.update(pred, batch["target"])
+            if len(val_loader) == 0:
+                print("Warning: validation loader is empty. Skipping validation metrics.")
+            else:
+                val_loss = 0.0
+                psnr.reset()
+                ssim.reset()
+                with torch.no_grad():
+                    for batch in tqdm(val_loader, desc=f"Val {epoch+1}/{cfg.train.epochs}"):
+                        batch = to_device(batch, device)
+                        pred = model(batch["input"])
+                        loss = loss_fn(pred, batch["target"])
+                        val_loss += loss.item()
+                        psnr.update(pred, batch["target"])
+                        ssim.update(pred, batch["target"])
 
-            avg_val_loss = val_loss / max(1, len(val_loader))
-            writer.add_scalar("val/loss", avg_val_loss, epoch)
-            writer.add_scalar("val/psnr", psnr.compute().item(), epoch)
-            writer.add_scalar("val/ssim", ssim.compute().item(), epoch)
+                avg_val_loss = val_loss / max(1, len(val_loader))
+                writer.add_scalar("val/loss", avg_val_loss, epoch)
+                writer.add_scalar("val/psnr", psnr.compute().item(), epoch)
+                writer.add_scalar("val/ssim", ssim.compute().item(), epoch)
 
         if cfg.train.save_last:
             ckpt_path = Path("checkpoints") / "last.pt"

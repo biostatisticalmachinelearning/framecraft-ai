@@ -84,6 +84,14 @@ python scripts/prepare_data.py --frames-root data/frames
 
 This produces JSONL manifests in `data/manifests/` with triplets: `prev`, `next`, `target`, `movie_id`.
 
+If you only have one movie and need a quick smoke test, you can split within a movie
+using a **contiguous validation chunk** (reduced leakage risk vs random frames, but
+still not recommended for final results):
+
+```bash
+python scripts/prepare_data.py --frames-root data/frames --split-within-movie
+```
+
 ## Training
 Default training uses the baseline U-Net. Crops are 256x256 by default.
 
@@ -201,6 +209,29 @@ python scripts/infer.py \
   --frame-b path/to/frame_0003.png \
   --output outputs/pred_0002.png \
   --checkpoint checkpoints/last.pt
+```
+
+## Video Interpolation + Denoising
+
+Denoise originals (predict each frame from its neighbors), then insert mid-frames to double FPS:
+
+```bash
+python scripts/interpolate_video.py \
+  --frames-dir data/frames/your_movie \
+  --checkpoint checkpoints/last.pt \
+  --output-dir outputs/interpolated \
+  --output-video outputs/interpolated.mp4
+```
+
+Only insert interleaved frames (keep originals):
+
+```bash
+python scripts/interpolate_video.py \
+  --frames-dir data/frames/your_movie \
+  --checkpoint checkpoints/last.pt \
+  --output-dir outputs/interpolated \
+  --output-video outputs/interpolated.mp4 \
+  --no-denoise-original
 ```
 
 ## Notes

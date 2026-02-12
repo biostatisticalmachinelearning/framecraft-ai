@@ -15,6 +15,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-out", default="data/manifests/test.jsonl")
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--test-ratio", type=float, default=0.1)
+    parser.add_argument(
+        "--split-within-movie",
+        action="store_true",
+        help="Split within each movie using a contiguous validation chunk (leakage risk).",
+    )
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--stride", type=int, default=1)
     parser.add_argument("--limit-per-movie", type=int, default=0)
@@ -91,6 +96,19 @@ def main() -> None:
         elif n_test > 0:
             n_test -= 1
 
+    if not args.split_within_movie and (n_val == 0 and args.val_ratio > 0):
+        print(
+            "Warning: validation split is empty. "
+            "Movie-level splits require >=2 movies. "
+            "Add more movies or pass --split-within-movie (leakage risk)."
+        )
+    if not args.split_within_movie and (n_test == 0 and args.test_ratio > 0):
+        print(
+            "Warning: test split is empty. "
+            "Movie-level splits require >=3 movies for non-empty train/val/test. "
+            "Add more movies or pass --split-within-movie (leakage risk)."
+        )
+
     train_movies = movies[:n_train]
     val_movies = movies[n_train : n_train + n_val]
     test_movies = movies[n_train + n_val : n_train + n_val + n_test]
@@ -108,9 +126,47 @@ def main() -> None:
             )
         return all_entries
 
-    train_entries = collect(train_movies)
-    val_entries = collect(val_movies)
-    test_entries = collect(test_movies)
+    if args.split_within_movie:
+        train_entries = []
+        val_entries = []
+        test_entries = []
+        for movie in movies:
+            frames = list_frames(movie, extensions)
+            if len(frames) < 3:
+                continue
+            entries = build_entries(
+                movie, frames, stride=args.stride, limit=args.limit_per_movie, t=args.t
+            )
+            if not entries:
+                continue
+            n = len(entries)
+            n_val_m = int(n * args.val_ratio)
+            n_test_m = int(n * args.test_ratio)
+            if n_val_m == 0 and args.val_ratio > 0 and n >= 3:
+                n_val_m = 1
+            if n_test_m == 0 and args.test_ratio > 0 and n >= 3:
+                n_test_m = 1
+            if n_val_m + n_test_m >= n:
+                n_val_m = max(0, min(n_val_m, n - 1))
+                n_test_m = max(0, min(n_test_m, n - 1 - n_val_m))
+
+            n_remaining = n - n_test_m
+            if n_val_m > 0:
+                val_start = max(0, (n_remaining - n_val_m) // 2)
+                val_end = val_start + n_val_m
+            else:
+                val_start = val_end = 0
+
+            # Train is the remainder around the validation chunk.
+            train_entries.extend(entries[:val_start])
+            train_entries.extend(entries[val_end:n_remaining])
+            val_entries.extend(entries[val_start:val_end])
+            if n_test_m > 0:
+                test_entries.extend(entries[n_remaining:])
+    else:
+        train_entries = collect(train_movies)
+        val_entries = collect(val_movies)
+        test_entries = collect(test_movies)
 
     write_manifest(Path(args.train_out), train_entries)
     write_manifest(Path(args.val_out), val_entries)
