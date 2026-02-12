@@ -42,6 +42,7 @@ optimizer:
 train:
   epochs: 20
   val_every: 1
+  val_interval_steps: 0
   save_last: true
 
 logging:

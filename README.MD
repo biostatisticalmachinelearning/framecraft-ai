@@ -106,6 +106,12 @@ To override crop size (e.g., 128 or 512):
 python scripts/train.py data.crop_size=128
 ```
 
+For long epochs, you can run validation mid-epoch every N training steps:
+
+```bash
+python scripts/train.py train.val_interval_steps=500
+```
+
 Hydra outputs (including TensorBoard logs) are written under `outputs/` by default.
 
 ## Evaluation

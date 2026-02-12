@@ -67,10 +67,33 @@ def main(cfg: DictConfig) -> None:
     ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
     global_step = 0
+    def run_validation(step_label: int, desc: str) -> None:
+        if len(val_loader) == 0:
+            print("Warning: validation loader is empty. Skipping validation metrics.")
+            return
+        model.eval()
+        val_loss = 0.0
+        psnr.reset()
+        ssim.reset()
+        with torch.no_grad():
+            for batch in tqdm(val_loader, desc=desc):
+                batch = to_device(batch, device)
+                pred = model(batch["input"])
+                loss = loss_fn(pred, batch["target"])
+                val_loss += loss.item()
+                psnr.update(pred, batch["target"])
+                ssim.update(pred, batch["target"])
+
+        avg_val_loss = val_loss / max(1, len(val_loader))
+        writer.add_scalar("val/loss", avg_val_loss, step_label)
+        writer.add_scalar("val/psnr", psnr.compute().item(), step_label)
+        writer.add_scalar("val/ssim", ssim.compute().item(), step_label)
+        model.train()
+
     for epoch in range(cfg.train.epochs):
         model.train()
         epoch_loss = 0.0
-        for batch in tqdm(train_loader, desc=f"Train {epoch+1}/{cfg.train.epochs}"):
+        for step, batch in enumerate(tqdm(train_loader, desc=f"Train {epoch+1}/{cfg.train.epochs}")):
             batch = to_device(batch, device)
             pred = model(batch["input"])
             loss = loss_fn(pred, batch["target"])
@@ -83,30 +106,14 @@ def main(cfg: DictConfig) -> None:
             writer.add_scalar("train/loss", loss.item(), global_step)
             global_step += 1
 
+            if cfg.train.val_interval_steps and (step + 1) % cfg.train.val_interval_steps == 0:
+                run_validation(global_step, desc=f"Val step {global_step}")
+
         avg_loss = epoch_loss / max(1, len(train_loader))
         writer.add_scalar("train/epoch_loss", avg_loss, epoch)
 
         if (epoch + 1) % cfg.train.val_every == 0:
-            model.eval()
-            if len(val_loader) == 0:
-                print("Warning: validation loader is empty. Skipping validation metrics.")
-            else:
-                val_loss = 0.0
-                psnr.reset()
-                ssim.reset()
-                with torch.no_grad():
-                    for batch in tqdm(val_loader, desc=f"Val {epoch+1}/{cfg.train.epochs}"):
-                        batch = to_device(batch, device)
-                        pred = model(batch["input"])
-                        loss = loss_fn(pred, batch["target"])
-                        val_loss += loss.item()
-                        psnr.update(pred, batch["target"])
-                        ssim.update(pred, batch["target"])
-
-                avg_val_loss = val_loss / max(1, len(val_loader))
-                writer.add_scalar("val/loss", avg_val_loss, epoch)
-                writer.add_scalar("val/psnr", psnr.compute().item(), epoch)
-                writer.add_scalar("val/ssim", ssim.compute().item(), epoch)
+            run_validation(epoch, desc=f"Val {epoch+1}/{cfg.train.epochs}")
 
         if cfg.train.save_last:
             ckpt_path = Path("checkpoints") / "last.pt"
