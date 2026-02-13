@@ -74,8 +74,7 @@ Extraction is lossless by default (PNG only).
 Tips for faster extraction:
 - Extract a quick subset: `--start 0 --duration 60`
 - Parallelize across movies: `--workers 2`
- - Show progress bars: `--progress`
-```
+- Show progress bars: `--progress`
 
 4. Build train/val/test manifests (default: contiguous within-movie splits):
 
