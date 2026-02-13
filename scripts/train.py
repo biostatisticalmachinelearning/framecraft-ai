@@ -41,6 +41,8 @@ def main(cfg: DictConfig) -> None:
         shuffle=True,
         num_workers=cfg.data.num_workers,
         pin_memory=cfg.data.pin_memory and device.type == "cuda",
+        prefetch_factor=cfg.data.prefetch_factor if cfg.data.num_workers > 0 else None,
+        persistent_workers=bool(cfg.data.persistent_workers) if cfg.data.num_workers > 0 else False,
     )
     val_loader = DataLoader(
         val_ds,
@@ -48,6 +50,8 @@ def main(cfg: DictConfig) -> None:
         shuffle=False,
         num_workers=cfg.data.num_workers,
         pin_memory=cfg.data.pin_memory and device.type == "cuda",
+        prefetch_factor=cfg.data.prefetch_factor if cfg.data.num_workers > 0 else None,
+        persistent_workers=bool(cfg.data.persistent_workers) if cfg.data.num_workers > 0 else False,
     )
 
     model = build_model(cfg.model).to(device)
