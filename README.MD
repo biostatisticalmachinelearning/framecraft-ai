@@ -77,7 +77,7 @@ Tips for faster extraction:
  - Show progress bars: `--progress`
 ```
 
-4. Build train/val/test manifests (movie-level splits):
+4. Build train/val/test manifests (default: contiguous within-movie splits):
 
 ```bash
 python scripts/prepare_data.py --frames-root data/frames
@@ -85,13 +85,13 @@ python scripts/prepare_data.py --frames-root data/frames
 
 This produces JSONL manifests in `data/manifests/` with triplets: `prev`, `next`, `target`, `movie_id`.
 
-If you only have one movie and need a quick smoke test, you can split within a movie
-using a **contiguous validation chunk** (reduced leakage risk vs random frames, but
-still not recommended for final results):
+If you want **strict movie-level splits** (recommended for final results), use:
 
 ```bash
-python scripts/prepare_data.py --frames-root data/frames --split-within-movie
+python scripts/prepare_data.py --frames-root data/frames --movie-level
 ```
+
+Movie-level splits require multiple movies to avoid empty val/test splits.
 
 ## Training
 Default training uses the baseline U-Net. Crops are 256x256 by default.

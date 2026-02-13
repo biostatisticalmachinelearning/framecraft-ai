@@ -16,9 +16,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--test-ratio", type=float, default=0.1)
     parser.add_argument(
-        "--split-within-movie",
+        "--movie-level",
         action="store_true",
-        help="Split within each movie using a contiguous validation chunk (leakage risk).",
+        help="Use movie-level splits (less risk of leakage, requires multiple movies).",
     )
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--stride", type=int, default=1)
@@ -72,6 +72,7 @@ def build_entries(
 
 def main() -> None:
     args = parse_args()
+    args.split_within_movie = not args.movie_level
     frames_root = Path(args.frames_root)
     extensions = [e.strip().lower() for e in args.extensions.split(",") if e.strip()]
 
