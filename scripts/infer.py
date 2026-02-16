@@ -34,11 +34,11 @@ def main() -> None:
     args = parse_args()
     device = get_device(prefer_mps=True)
 
-    ckpt = torch.load(args.checkpoint, map_location="cpu")
+    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     cfg = ckpt.get("cfg", {})
     model_cfg = cfg.get("model", {})
     model = build_model(model_cfg).to(device)
-    model.load_state_dict(ckpt["model_state"], strict=False)
+    model.load_state_dict(ckpt["model_state"])
     model.eval()
 
     frame_a = load_image(args.frame_a, args.force_rgb)

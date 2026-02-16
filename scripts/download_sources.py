@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -159,7 +159,7 @@ def download_one(src: Dict[str, Any], download_url: str, dest: Path) -> Dict[str
         "file_path": str(dest),
         "size_bytes": size_bytes,
         "sha256": sha256,
-        "fetched_at": datetime.utcnow().isoformat() + "Z",
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
         "notes": src.get("notes"),
     }
 

@@ -72,13 +72,12 @@ def build_output_sequence(
 ) -> List[torch.Tensor]:
     output = []
     n = len(originals)
+    if n == 0:
+        return output
+    output.append(denoised[0] if denoised else originals[0])
     for i in range(n - 1):
-        prev = denoised[i] if denoised else originals[i]
-        nxt = denoised[i + 1] if denoised else originals[i + 1]
-        if i == 0:
-            output.append(prev)
         output.append(mids[i])
-        output.append(nxt)
+        output.append(denoised[i + 1] if denoised else originals[i + 1])
     return output
 
 
@@ -129,10 +128,10 @@ def main() -> None:
     )
     print(f"Using device: {device}")
 
-    ckpt = torch.load(args.checkpoint, map_location="cpu")
+    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     model_cfg = ckpt.get("cfg", {}).get("model", {})
     model = build_model(model_cfg).to(device)
-    model.load_state_dict(ckpt["model_state"], strict=False)
+    model.load_state_dict(ckpt["model_state"])
     model.eval()
 
     originals = [load_frame(p) for p in tqdm(frame_paths, desc="Load frames")]

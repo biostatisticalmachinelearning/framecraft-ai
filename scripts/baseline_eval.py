@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import lpips
 import torch
@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def split_prev_next(inp: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+def split_prev_next(inp: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     c = inp.shape[1] // 2
     return inp[:, :c], inp[:, c:]
 
@@ -94,7 +94,7 @@ def main() -> None:
                 preds.append(pred)
             pred = torch.stack(preds, dim=0).to(device)
 
-            l1_sum += F.l1_loss(pred, target, reduction="sum").item()
+            l1_sum += F.l1_loss(pred, target, reduction="mean").item() * pred.shape[0]
             psnr.update(pred, target)
             ssim.update(pred, target)
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
+import contextlib
 
 import hydra
 from hydra.core.hydra_config import HydraConfig
@@ -28,11 +30,15 @@ def main(cfg: DictConfig) -> None:
         cfg.data.train_manifest,
         force_rgb=cfg.data.force_rgb,
         crop_size=cfg.data.crop_size,
+        crop_mode=cfg.data.crop_mode,
+        hflip_prob=cfg.data.hflip_prob,
     )
     val_ds = FrameInterpolationDataset(
         cfg.data.val_manifest,
         force_rgb=cfg.data.force_rgb,
         crop_size=cfg.data.crop_size,
+        crop_mode=cfg.data.val_crop_mode,
+        hflip_prob=0.0,
     )
 
     train_loader = DataLoader(
@@ -62,6 +68,26 @@ def main(cfg: DictConfig) -> None:
     )
     loss_fn = torch.nn.L1Loss()
 
+    scheduler = None
+    if getattr(cfg, "scheduler", None) and cfg.scheduler.name not in ("", "none", None):
+        if cfg.scheduler.name == "cosine":
+            base_lr = cfg.optimizer.lr
+            min_lr = cfg.scheduler.min_lr
+            warmup_epochs = int(cfg.scheduler.warmup_epochs)
+            total_epochs = int(cfg.train.epochs)
+            min_factor = min_lr / base_lr if base_lr > 0 else 0.0
+
+            def lr_lambda(epoch: int) -> float:
+                if warmup_epochs > 0 and epoch < warmup_epochs:
+                    return float(epoch + 1) / float(max(1, warmup_epochs))
+                progress = (epoch - warmup_epochs) / max(1, total_epochs - warmup_epochs)
+                cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+                return min_factor + (1.0 - min_factor) * cosine
+
+            scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+        else:
+            raise ValueError(f"Unknown scheduler: {cfg.scheduler.name}")
+
     log_dir = cfg.logging.log_dir
     if log_dir is None:
         log_dir = Path(HydraConfig.get().runtime.output_dir) / "tb"
@@ -70,67 +96,146 @@ def main(cfg: DictConfig) -> None:
     psnr = PeakSignalNoiseRatio(data_range=1.0).to(device)
     ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
+    use_amp = bool(cfg.train.amp) and device.type in ("cuda", "mps")
+    amp_device = device.type
+    amp_dtype = torch.float16 if amp_device in ("cuda", "mps") else torch.bfloat16
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp and device.type == "cuda")
+
+    amp_autocast_ok = True
+
+    def autocast_context():
+        nonlocal amp_autocast_ok
+        if not use_amp or not amp_autocast_ok:
+            return contextlib.nullcontext()
+        try:
+            return torch.autocast(device_type=amp_device, dtype=amp_dtype, enabled=True)
+        except Exception:
+            print(f"Warning: AMP autocast not supported on {amp_device}. Disabling AMP.")
+            amp_autocast_ok = False
+            return contextlib.nullcontext()
+
+    best_value = None
+    best_step = None
+    best_metric = str(cfg.train.best_metric)
+    best_mode = "min" if best_metric in ("val_loss", "loss") else "max"
+
+    def save_checkpoint(path: Path, epoch: int, step: int) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "model_state": model.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+            "epoch": epoch,
+            "global_step": step,
+            "cfg": OmegaConf.to_container(cfg, resolve=True),
+        }
+        if scheduler is not None:
+            payload["scheduler_state"] = scheduler.state_dict()
+        torch.save(payload, path)
+
     global_step = 0
-    def run_validation(step_label: int, desc: str) -> None:
+
+    def run_validation(step_label: int, desc: str) -> dict:
         if len(val_loader) == 0:
             print("Warning: validation loader is empty. Skipping validation metrics.")
-            return
+            return {}
         model.eval()
         val_loss = 0.0
+        val_samples = 0
         psnr.reset()
         ssim.reset()
         with torch.no_grad():
             for batch in tqdm(val_loader, desc=desc):
                 batch = to_device(batch, device)
-                pred = model(batch["input"])
-                loss = loss_fn(pred, batch["target"])
-                val_loss += loss.item()
+                with autocast_context():
+                    pred = model(batch["input"])
+                    if cfg.train.clamp_output:
+                        pred = pred.clamp(0, 1)
+                    loss = loss_fn(pred, batch["target"])
+                batch_size = pred.shape[0]
+                val_loss += loss.item() * batch_size
+                val_samples += batch_size
                 psnr.update(pred, batch["target"])
                 ssim.update(pred, batch["target"])
 
-        avg_val_loss = val_loss / max(1, len(val_loader))
+        avg_val_loss = val_loss / max(1, val_samples)
+        metrics = {
+            "val_loss": avg_val_loss,
+            "val_psnr": psnr.compute().item(),
+            "val_ssim": ssim.compute().item(),
+        }
         writer.add_scalar("val/loss", avg_val_loss, step_label)
-        writer.add_scalar("val/psnr", psnr.compute().item(), step_label)
-        writer.add_scalar("val/ssim", ssim.compute().item(), step_label)
+        writer.add_scalar("val/psnr", metrics["val_psnr"], step_label)
+        writer.add_scalar("val/ssim", metrics["val_ssim"], step_label)
         model.train()
+        return metrics
 
     for epoch in range(cfg.train.epochs):
         model.train()
         epoch_loss = 0.0
+        epoch_samples = 0
         for step, batch in enumerate(tqdm(train_loader, desc=f"Train {epoch+1}/{cfg.train.epochs}")):
             batch = to_device(batch, device)
-            pred = model(batch["input"])
-            loss = loss_fn(pred, batch["target"])
+            optimizer.zero_grad(set_to_none=True)
+            with autocast_context():
+                pred = model(batch["input"])
+                if cfg.train.clamp_output:
+                    pred = pred.clamp(0, 1)
+                loss = loss_fn(pred, batch["target"])
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            if scaler.is_enabled():
+                scaler.scale(loss).backward()
+                if cfg.train.grad_clip_norm and cfg.train.grad_clip_norm > 0:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip_norm)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                if cfg.train.grad_clip_norm and cfg.train.grad_clip_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip_norm)
+                optimizer.step()
 
-            epoch_loss += loss.item()
+            batch_size = pred.shape[0]
+            epoch_loss += loss.item() * batch_size
+            epoch_samples += batch_size
             writer.add_scalar("train/loss", loss.item(), global_step)
             global_step += 1
 
             if cfg.train.val_interval_steps and (step + 1) % cfg.train.val_interval_steps == 0:
-                run_validation(global_step, desc=f"Val step {global_step}")
+                metrics = run_validation(global_step, desc=f"Val step {global_step}")
+                if cfg.train.save_best and metrics:
+                    value = metrics.get(best_metric)
+                    if value is not None:
+                        is_better = best_value is None or (
+                            value < best_value if best_mode == "min" else value > best_value
+                        )
+                        if is_better:
+                            best_value = value
+                            best_step = global_step
+                            save_checkpoint(Path("checkpoints") / "best.pt", epoch, global_step)
 
-        avg_loss = epoch_loss / max(1, len(train_loader))
+        avg_loss = epoch_loss / max(1, epoch_samples)
         writer.add_scalar("train/epoch_loss", avg_loss, epoch)
+        writer.add_scalar("train/lr", optimizer.param_groups[0]["lr"], epoch)
 
         if (epoch + 1) % cfg.train.val_every == 0:
-            run_validation(epoch, desc=f"Val {epoch+1}/{cfg.train.epochs}")
+            metrics = run_validation(epoch, desc=f"Val {epoch+1}/{cfg.train.epochs}")
+            if cfg.train.save_best and metrics:
+                value = metrics.get(best_metric)
+                if value is not None:
+                    is_better = best_value is None or (
+                        value < best_value if best_mode == "min" else value > best_value
+                    )
+                    if is_better:
+                        best_value = value
+                        best_step = epoch
+                        save_checkpoint(Path("checkpoints") / "best.pt", epoch, global_step)
 
         if cfg.train.save_last:
-            ckpt_path = Path("checkpoints") / "last.pt"
-            ckpt_path.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(
-                {
-                    "model_state": model.state_dict(),
-                    "optimizer_state": optimizer.state_dict(),
-                    "epoch": epoch,
-                    "cfg": OmegaConf.to_container(cfg, resolve=True),
-                },
-                ckpt_path,
-            )
+            save_checkpoint(Path("checkpoints") / "last.pt", epoch, global_step)
+
+        if scheduler is not None:
+            scheduler.step()
 
     writer.close()
 

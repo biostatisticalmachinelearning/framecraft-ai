@@ -22,6 +22,9 @@ data:
   prefetch_factor: 2
   persistent_workers: true
   crop_size: 256
+  crop_mode: random
+  val_crop_mode: center
+  hflip_prob: 0.5
 
 model:
   name: unet
@@ -41,11 +44,21 @@ optimizer:
   lr: 1.0e-4
   weight_decay: 1.0e-4
 
+scheduler:
+  name: cosine
+  warmup_epochs: 1
+  min_lr: 1.0e-6
+
 train:
   epochs: 20
   val_every: 1
   val_interval_steps: 0
   save_last: true
+  save_best: true
+  best_metric: val_loss
+  grad_clip_norm: 1.0
+  amp: true
+  clamp_output: true
 
 logging:
   log_dir: null

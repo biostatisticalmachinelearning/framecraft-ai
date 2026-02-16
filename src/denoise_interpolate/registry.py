@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -28,7 +28,7 @@ def build_entry(
     extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     entry: Dict[str, Any] = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "checkpoint": checkpoint,
         "manifest": manifest,
         "metrics": metrics,

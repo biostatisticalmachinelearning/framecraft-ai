@@ -62,3 +62,35 @@ def joint_random_crop(
     nxt = apply_crop(nxt, top, left, crop_size, crop_size)
     target = apply_crop(target, top, left, crop_size, crop_size)
     return prev, nxt, target
+
+
+def joint_center_crop(
+    prev: torch.Tensor,
+    nxt: torch.Tensor,
+    target: torch.Tensor,
+    crop_size: Optional[int],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if not crop_size:
+        return prev, nxt, target
+
+    prev = ensure_min_size(prev, crop_size, crop_size)
+    nxt = ensure_min_size(nxt, crop_size, crop_size)
+    target = ensure_min_size(target, crop_size, crop_size)
+
+    prev = center_crop(prev, crop_size, crop_size)
+    nxt = center_crop(nxt, crop_size, crop_size)
+    target = center_crop(target, crop_size, crop_size)
+    return prev, nxt, target
+
+
+def joint_random_horizontal_flip(
+    prev: torch.Tensor,
+    nxt: torch.Tensor,
+    target: torch.Tensor,
+    prob: float,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if prob <= 0.0:
+        return prev, nxt, target
+    if random.random() >= prob:
+        return prev, nxt, target
+    return prev.flip(-1), nxt.flip(-1), target.flip(-1)

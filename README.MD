@@ -94,6 +94,9 @@ Movie-level splits require multiple movies to avoid empty val/test splits.
 
 ## Training
 Default training uses the baseline U-Net. Crops are 256x256 by default.
+Training uses random horizontal flips (p=0.5) and validation uses center crops.
+By default, we use cosine LR schedule with warmup, AMP (when available), gradient clipping,
+and save `checkpoints/best.pt` based on validation L1 loss.
 
 ```bash
 python scripts/train.py
@@ -243,7 +246,7 @@ python scripts/interpolate_video.py \
 ## Notes
 - Use movie-level splits to avoid data leakage.
 - For grayscale films, enable `force_rgb` in configs or pass `--force-rgb` to scripts.
-- If you have limited local disk (e.g., 28GB), keep `--max-total-gb` low and use the desktop GPU machine for larger downloads.
+- If you have limited local disk keep `--max-total-gb` low.
 
 ## Suggested Public-Domain Sources (Initial Set)
 - LOC National Screening Room: Duck and Cover (1951) — https://www.loc.gov/item/2022604365/

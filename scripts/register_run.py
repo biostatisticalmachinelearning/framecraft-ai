@@ -34,7 +34,7 @@ def main() -> None:
 
     cfg = None
     if not args.no_cfg:
-        ckpt = torch.load(args.checkpoint, map_location="cpu")
+        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
         cfg = ckpt.get("cfg", None)
 
     entry = build_entry(

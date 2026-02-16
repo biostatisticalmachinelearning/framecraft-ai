@@ -18,6 +18,8 @@ class FrameInterpolationDataset(Dataset):
         force_rgb: bool = True,
         transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
         crop_size: Optional[int] = None,
+        crop_mode: str = "random",
+        hflip_prob: float = 0.0,
     ) -> None:
         self.manifest_path = Path(manifest_path)
         if not self.manifest_path.exists():
@@ -29,6 +31,8 @@ class FrameInterpolationDataset(Dataset):
         self.force_rgb = force_rgb
         self.transform = transform
         self.crop_size = crop_size
+        self.crop_mode = crop_mode
+        self.hflip_prob = hflip_prob
 
     def __len__(self) -> int:
         return len(self.items)
@@ -49,9 +53,19 @@ class FrameInterpolationDataset(Dataset):
         target = self._load_image(item["target"])
 
         if self.crop_size:
-            from .transforms import joint_random_crop
+            from .transforms import joint_center_crop, joint_random_crop
 
-            prev, nxt, target = joint_random_crop(prev, nxt, target, self.crop_size)
+            if self.crop_mode == "center":
+                prev, nxt, target = joint_center_crop(prev, nxt, target, self.crop_size)
+            else:
+                prev, nxt, target = joint_random_crop(prev, nxt, target, self.crop_size)
+
+        if self.hflip_prob > 0.0:
+            from .transforms import joint_random_horizontal_flip
+
+            prev, nxt, target = joint_random_horizontal_flip(
+                prev, nxt, target, prob=self.hflip_prob
+            )
 
         if self.transform is not None:
             prev = self.transform(prev)

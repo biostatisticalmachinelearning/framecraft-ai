@@ -135,35 +135,52 @@ def main() -> None:
             frames = list_frames(movie, extensions)
             if len(frames) < 3:
                 continue
-            entries = build_entries(
-                movie, frames, stride=args.stride, limit=args.limit_per_movie, t=args.t
-            )
-            if not entries:
-                continue
-            n = len(entries)
-            n_val_m = int(n * args.val_ratio)
-            n_test_m = int(n * args.test_ratio)
-            if n_val_m == 0 and args.val_ratio > 0 and n >= 3:
-                n_val_m = 1
-            if n_test_m == 0 and args.test_ratio > 0 and n >= 3:
-                n_test_m = 1
-            if n_val_m + n_test_m >= n:
-                n_val_m = max(0, min(n_val_m, n - 1))
-                n_test_m = max(0, min(n_test_m, n - 1 - n_val_m))
+            n_frames = len(frames)
+            n_val_f = int(n_frames * args.val_ratio)
+            n_test_f = int(n_frames * args.test_ratio)
 
-            n_remaining = n - n_test_m
-            if n_val_m > 0:
-                val_start = max(0, (n_remaining - n_val_m) // 2)
-                val_end = val_start + n_val_m
+            if n_val_f > 0 and n_val_f < 3 and n_frames >= 3:
+                n_val_f = 3
+            if n_test_f > 0 and n_test_f < 3 and n_frames >= 3:
+                n_test_f = 3
+
+            if n_val_f + n_test_f >= n_frames - 2:
+                n_val_f = max(0, min(n_val_f, n_frames - 3))
+                n_test_f = max(0, min(n_test_f, n_frames - 3 - n_val_f))
+
+            test_start = n_frames - n_test_f if n_test_f > 0 else n_frames
+            remaining = test_start
+            if n_val_f > 0:
+                val_start = max(0, (remaining - n_val_f) // 2)
+                val_end = val_start + n_val_f
             else:
                 val_start = val_end = 0
 
-            # Train is the remainder around the validation chunk.
-            train_entries.extend(entries[:val_start])
-            train_entries.extend(entries[val_end:n_remaining])
-            val_entries.extend(entries[val_start:val_end])
-            if n_test_m > 0:
-                test_entries.extend(entries[n_remaining:])
+            train_segments = [frames[:val_start], frames[val_end:remaining]]
+            val_segment = frames[val_start:val_end]
+            test_segment = frames[test_start:]
+
+            # Limit applies to training samples only.
+            remaining_limit = args.limit_per_movie
+            for segment in train_segments:
+                if len(segment) < 3:
+                    continue
+                limit = remaining_limit if remaining_limit > 0 else 0
+                entries = build_entries(movie, segment, stride=args.stride, limit=limit, t=args.t)
+                train_entries.extend(entries)
+                if remaining_limit > 0:
+                    remaining_limit = max(0, remaining_limit - len(entries))
+                    if remaining_limit == 0:
+                        break
+
+            if len(val_segment) >= 3:
+                val_entries.extend(
+                    build_entries(movie, val_segment, stride=args.stride, limit=0, t=args.t)
+                )
+            if len(test_segment) >= 3:
+                test_entries.extend(
+                    build_entries(movie, test_segment, stride=args.stride, limit=0, t=args.t)
+                )
     else:
         train_entries = collect(train_movies)
         val_entries = collect(val_movies)

@@ -41,7 +41,7 @@ def load_model(ckpt: dict, device: torch.device) -> torch.nn.Module:
     cfg = ckpt.get("cfg", {})
     model_cfg = cfg.get("model", {})
     model = build_model(model_cfg).to(device)
-    model.load_state_dict(ckpt["model_state"], strict=False)
+    model.load_state_dict(ckpt["model_state"])
     model.eval()
     return model
 
@@ -50,7 +50,7 @@ def main() -> None:
     args = parse_args()
     device = get_device(prefer_mps=True)
 
-    ckpt = torch.load(args.checkpoint, map_location="cpu")
+    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     cfg = ckpt.get("cfg", {})
 
     dataset = FrameInterpolationDataset(args.manifest, force_rgb=args.force_rgb)
@@ -82,7 +82,7 @@ def main() -> None:
             target = batch["target"]
 
             batch_size = pred.shape[0]
-            l1_sum += F.l1_loss(pred, target, reduction="sum").item()
+            l1_sum += F.l1_loss(pred, target, reduction="mean").item() * batch_size
             psnr.update(pred, target)
             ssim.update(pred, target)
 
