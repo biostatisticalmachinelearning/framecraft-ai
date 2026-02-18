@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import json
 from pathlib import Path
 import contextlib
 
@@ -59,6 +60,7 @@ def main(cfg: DictConfig) -> None:
         prefetch_factor=cfg.data.prefetch_factor if cfg.data.num_workers > 0 else None,
         persistent_workers=bool(cfg.data.persistent_workers) if cfg.data.num_workers > 0 else False,
     )
+    steps_per_epoch = max(1, len(train_loader))
 
     model = build_model(cfg.model).to(device)
     print(f"Trainable parameters: {count_parameters(model):,}")
@@ -92,6 +94,17 @@ def main(cfg: DictConfig) -> None:
     if log_dir is None:
         log_dir = Path(HydraConfig.get().runtime.output_dir) / "tb"
     writer = SummaryWriter(log_dir=str(log_dir))
+
+    run_dir = Path(HydraConfig.get().runtime.output_dir)
+    metrics_path = run_dir / "metrics.jsonl"
+
+    def append_metrics(record: dict) -> None:
+        record = dict(record)
+        record.setdefault("run_dir", str(run_dir))
+        record.setdefault("model", str(cfg.model.name))
+        record.setdefault("residual", bool(getattr(cfg.model, "residual", False)))
+        with metrics_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
 
     psnr = PeakSignalNoiseRatio(data_range=1.0).to(device)
     ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
@@ -134,7 +147,13 @@ def main(cfg: DictConfig) -> None:
 
     global_step = 0
 
-    def run_validation(step_label: int, desc: str) -> dict:
+    def run_validation(
+        step_label: int,
+        desc: str,
+        epoch: int,
+        step_in_epoch: int,
+        event: str,
+    ) -> dict:
         if len(val_loader) == 0:
             print("Warning: validation loader is empty. Skipping validation metrics.")
             return {}
@@ -166,6 +185,24 @@ def main(cfg: DictConfig) -> None:
         writer.add_scalar("val/loss", avg_val_loss, step_label)
         writer.add_scalar("val/psnr", metrics["val_psnr"], step_label)
         writer.add_scalar("val/ssim", metrics["val_ssim"], step_label)
+        print(
+            "Val "
+            f"epoch={epoch+1} step={step_label} "
+            f"loss={metrics['val_loss']:.6f} "
+            f"psnr={metrics['val_psnr']:.4f} "
+            f"ssim={metrics['val_ssim']:.4f}"
+        )
+        append_metrics(
+            {
+                "split": "val",
+                "epoch": epoch,
+                "step": step_label,
+                "step_in_epoch": step_in_epoch,
+                "steps_per_epoch": steps_per_epoch,
+                "event": event,
+                **metrics,
+            }
+        )
         model.train()
         return metrics
 
@@ -202,7 +239,13 @@ def main(cfg: DictConfig) -> None:
             global_step += 1
 
             if cfg.train.val_interval_steps and (step + 1) % cfg.train.val_interval_steps == 0:
-                metrics = run_validation(global_step, desc=f"Val step {global_step}")
+                metrics = run_validation(
+                    global_step,
+                    desc=f"Val step {global_step}",
+                    epoch=epoch,
+                    step_in_epoch=step + 1,
+                    event="interval",
+                )
                 if cfg.train.save_best and metrics:
                     value = metrics.get(best_metric)
                     if value is not None:
@@ -213,13 +256,34 @@ def main(cfg: DictConfig) -> None:
                             best_value = value
                             best_step = global_step
                             save_checkpoint(Path("checkpoints") / "best.pt", epoch, global_step)
+                            print(
+                                f"New best {best_metric}: {best_value:.6f} at step {best_step}"
+                            )
 
         avg_loss = epoch_loss / max(1, epoch_samples)
         writer.add_scalar("train/epoch_loss", avg_loss, epoch)
         writer.add_scalar("train/lr", optimizer.param_groups[0]["lr"], epoch)
+        append_metrics(
+            {
+                "split": "train",
+                "epoch": epoch,
+                "step": global_step,
+                "step_in_epoch": steps_per_epoch,
+                "steps_per_epoch": steps_per_epoch,
+                "event": "epoch",
+                "train_loss": avg_loss,
+                "lr": optimizer.param_groups[0]["lr"],
+            }
+        )
 
         if (epoch + 1) % cfg.train.val_every == 0:
-            metrics = run_validation(epoch, desc=f"Val {epoch+1}/{cfg.train.epochs}")
+            metrics = run_validation(
+                global_step,
+                desc=f"Val {epoch+1}/{cfg.train.epochs}",
+                epoch=epoch,
+                step_in_epoch=steps_per_epoch,
+                event="epoch",
+            )
             if cfg.train.save_best and metrics:
                 value = metrics.get(best_metric)
                 if value is not None:
@@ -228,8 +292,9 @@ def main(cfg: DictConfig) -> None:
                     )
                     if is_better:
                         best_value = value
-                        best_step = epoch
+                        best_step = global_step
                         save_checkpoint(Path("checkpoints") / "best.pt", epoch, global_step)
+                        print(f"New best {best_metric}: {best_value:.6f} at step {best_step}")
 
         if cfg.train.save_last:
             save_checkpoint(Path("checkpoints") / "last.pt", epoch, global_step)

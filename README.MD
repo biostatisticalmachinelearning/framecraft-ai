@@ -98,6 +98,26 @@ Training uses random horizontal flips (p=0.5) and validation uses center crops.
 By default, we use cosine LR schedule with warmup, AMP (when available), gradient clipping,
 and save `checkpoints/best.pt` based on validation L1 loss.
 
+You can enable a residual skip from the input blend (helps frame replication):
+
+```bash
+python scripts/train.py model.name=resunet
+```
+
+Or keep the base model and toggle residual mode explicitly:
+
+```bash
+python scripts/train.py model.name=unet model.residual=true
+```
+
+For the ViT backbone:
+
+```bash
+python scripts/train.py model.name=resvit
+```
+
+The ViT decoder is configurable via `model.vit.decoder_*` (channels, depth, upsample mode).
+
 ```bash
 python scripts/train.py
 ```
@@ -115,6 +135,19 @@ python scripts/train.py train.val_interval_steps=500
 ```
 
 Hydra outputs (including TensorBoard logs) are written under `outputs/` by default.
+
+## Plotting Training Curves
+Training writes `metrics.jsonl` to each run directory. You can compare runs and add baseline
+references with:
+
+```bash
+python scripts/plot_training.py \\
+  --runs outputs/2025-01-01/12-00-00 outputs/2025-01-02/13-30-00 \\
+  --out-dir outputs/plots \\
+  --baseline-dir outputs/baselines
+```
+
+Plots are saved as PNG and PDF in `outputs/plots/`.
 
 ## Evaluation
 

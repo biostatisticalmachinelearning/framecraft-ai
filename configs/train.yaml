@@ -32,6 +32,8 @@ model:
   out_channels: 3
   base_channels: 64
   depth: 4
+  residual: false
+  residual_t: 0.5
   vit:
     patch_size: 16
     embed_dim: 256
@@ -39,6 +41,9 @@ model:
     num_heads: 8
     mlp_ratio: 4.0
     dropout: 0.0
+    decoder_channels: 128
+    decoder_depth: 2
+    decoder_upsample: bilinear
 
 optimizer:
   lr: 1.0e-4

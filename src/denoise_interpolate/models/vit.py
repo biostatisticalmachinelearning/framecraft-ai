@@ -62,11 +62,17 @@ class ViT(nn.Module):
         num_heads: int = 8,
         mlp_ratio: float = 4.0,
         dropout: float = 0.0,
+        decoder_channels: int = 128,
+        decoder_depth: int = 2,
+        decoder_upsample: str = "bilinear",
     ) -> None:
         super().__init__()
         self.patch_size = patch_size
         self.embed_dim = embed_dim
         self.out_channels = out_channels
+        self.decoder_channels = decoder_channels
+        self.decoder_depth = decoder_depth
+        self.decoder_upsample = decoder_upsample
 
         self.patch_embed = PatchEmbed(in_channels, embed_dim, patch_size)
         encoder_layer = nn.TransformerEncoderLayer(
@@ -79,7 +85,46 @@ class ViT(nn.Module):
             norm_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=depth)
-        self.proj = nn.Linear(embed_dim, patch_size * patch_size * out_channels)
+
+        # Token -> feature map projection for decoder.
+        if decoder_channels and decoder_channels > 0:
+            self.dec_proj = nn.Conv2d(embed_dim, decoder_channels, kernel_size=1)
+        else:
+            self.dec_proj = None
+        self.upsample_blocks = nn.ModuleList()
+
+        if decoder_channels and decoder_channels > 0:
+            num_upsamples = int(round(math.log2(patch_size)))
+            if 2**num_upsamples != patch_size:
+                num_upsamples = 0
+            for _ in range(num_upsamples):
+                self.upsample_blocks.append(
+                    nn.Sequential(
+                        nn.Upsample(
+                            scale_factor=2,
+                            mode=decoder_upsample,
+                            align_corners=False
+                            if decoder_upsample in ("linear", "bilinear", "bicubic", "trilinear")
+                            else None,
+                        ),
+                        nn.Conv2d(decoder_channels, decoder_channels, kernel_size=3, padding=1),
+                        nn.GELU(),
+                        nn.Conv2d(decoder_channels, decoder_channels, kernel_size=3, padding=1),
+                        nn.GELU(),
+                    )
+                )
+            refine = []
+            for _ in range(max(0, decoder_depth)):
+                refine.extend(
+                    [
+                        nn.Conv2d(decoder_channels, decoder_channels, kernel_size=3, padding=1),
+                        nn.GELU(),
+                    ]
+                )
+            self.refine = nn.Sequential(*refine) if refine else nn.Identity()
+            self.out = nn.Conv2d(decoder_channels, out_channels, kernel_size=1)
+        else:
+            self.proj = nn.Linear(embed_dim, patch_size * patch_size * out_channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w = x.shape
@@ -95,11 +140,30 @@ class ViT(nn.Module):
         tokens = tokens + pos
 
         tokens = self.encoder(tokens)
-        patches = self.proj(tokens)  # (B, N, p*p*out_ch)
 
-        patches = patches.view(b, gh, gw, self.out_channels, p, p)
-        patches = patches.permute(0, 3, 1, 4, 2, 5).contiguous()
-        out = patches.view(b, self.out_channels, gh * p, gw * p)
+        if self.dec_proj is None:
+            patches = self.proj(tokens)  # (B, N, p*p*out_ch)
+            patches = patches.view(b, gh, gw, self.out_channels, p, p)
+            patches = patches.permute(0, 3, 1, 4, 2, 5).contiguous()
+            out = patches.view(b, self.out_channels, gh * p, gw * p)
+        else:
+            feat = tokens.transpose(1, 2).contiguous().view(b, self.embed_dim, gh, gw)
+            feat = self.dec_proj(feat)
+            if self.upsample_blocks:
+                for block in self.upsample_blocks:
+                    feat = block(feat)
+            else:
+                kwargs = {}
+                if self.decoder_upsample in ("linear", "bilinear", "bicubic", "trilinear"):
+                    kwargs["align_corners"] = False
+                feat = F.interpolate(
+                    feat,
+                    size=(gh * p, gw * p),
+                    mode=self.decoder_upsample,
+                    **kwargs,
+                )
+            feat = self.refine(feat)
+            out = self.out(feat)
 
         if pad_h or pad_w:
             out = out[:, :, :h, :w]

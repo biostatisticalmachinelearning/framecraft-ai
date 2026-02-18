@@ -23,6 +23,7 @@ dependencies = [
   "lpips",
   "requests",
   "pyyaml",
+  "matplotlib",
 ]
 
 [project.optional-dependencies]
