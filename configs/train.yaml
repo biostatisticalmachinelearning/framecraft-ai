@@ -64,6 +64,7 @@ train:
   grad_clip_norm: 1.0
   amp: true
   clamp_output: true
+  checkpoint_dir: null
 
 logging:
   log_dir: null

@@ -96,7 +96,7 @@ Movie-level splits require multiple movies to avoid empty val/test splits.
 Default training uses the baseline U-Net. Crops are 256x256 by default.
 Training uses random horizontal flips (p=0.5) and validation uses center crops.
 By default, we use cosine LR schedule with warmup, AMP (when available), gradient clipping,
-and save `checkpoints/best.pt` based on validation L1 loss.
+and save `checkpoints/best.pt` based on validation L1 loss inside each run directory.
 
 You can enable a residual skip from the input blend (helps frame replication):
 
@@ -135,6 +135,8 @@ python scripts/train.py train.val_interval_steps=500
 ```
 
 Hydra outputs (including TensorBoard logs) are written under `outputs/` by default.
+Each run directory includes `metrics.jsonl` (train/val metrics per epoch/interval) and
+`checkpoints/` (best/last).
 
 ## Plotting Training Curves
 Training writes `metrics.jsonl` to each run directory. You can compare runs and add baseline

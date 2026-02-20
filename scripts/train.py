@@ -97,6 +97,12 @@ def main(cfg: DictConfig) -> None:
 
     run_dir = Path(HydraConfig.get().runtime.output_dir)
     metrics_path = run_dir / "metrics.jsonl"
+    if cfg.train.checkpoint_dir:
+        checkpoint_dir = Path(cfg.train.checkpoint_dir)
+        if not checkpoint_dir.is_absolute():
+            checkpoint_dir = run_dir / checkpoint_dir
+    else:
+        checkpoint_dir = run_dir / "checkpoints"
 
     def append_metrics(record: dict) -> None:
         record = dict(record)
@@ -255,7 +261,7 @@ def main(cfg: DictConfig) -> None:
                         if is_better:
                             best_value = value
                             best_step = global_step
-                            save_checkpoint(Path("checkpoints") / "best.pt", epoch, global_step)
+                            save_checkpoint(checkpoint_dir / "best.pt", epoch, global_step)
                             print(
                                 f"New best {best_metric}: {best_value:.6f} at step {best_step}"
                             )
@@ -293,11 +299,11 @@ def main(cfg: DictConfig) -> None:
                     if is_better:
                         best_value = value
                         best_step = global_step
-                        save_checkpoint(Path("checkpoints") / "best.pt", epoch, global_step)
+                        save_checkpoint(checkpoint_dir / "best.pt", epoch, global_step)
                         print(f"New best {best_metric}: {best_value:.6f} at step {best_step}")
 
         if cfg.train.save_last:
-            save_checkpoint(Path("checkpoints") / "last.pt", epoch, global_step)
+            save_checkpoint(checkpoint_dir / "last.pt", epoch, global_step)
 
         if scheduler is not None:
             scheduler.step()
